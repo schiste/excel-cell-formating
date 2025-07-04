@@ -1,0 +1,85 @@
+Sub FormatCellsByCriteriaWithProgress()
+    Dim ws As Worksheet, otherWs As Worksheet, formulaCells As Range
+    Dim totalSheets As Long, totalFormulaCells As Long
+    Dim sheetIndex As Long, cellIndex As Long
+    Dim barWidth As Integer, currentBars As Integer, pctDone As Integer
+    
+    ' Optimize performance
+    With Application
+        .ScreenUpdating = False
+        .Calculation = xlCalculationManual
+        .EnableEvents = False
+        .DisplayStatusBar = True
+    End With
+    
+    ' Clear formats
+    For Each ws In ThisWorkbook.Worksheets
+        ws.UsedRange.Interior.ColorIndex = xlNone
+    Next
+    
+    ' Color numeric constants efficiently
+    For Each ws In ThisWorkbook.Worksheets
+        On Error Resume Next
+        ws.UsedRange.SpecialCells(xlCellTypeConstants, xlNumbers).Interior.Color = RGB(235, 241, 222)
+        On Error GoTo 0
+    Next
+    
+    ' Prepare formula cells
+    totalFormulaCells = 0
+    For Each ws In ThisWorkbook.Worksheets
+        On Error Resume Next
+        Set formulaCells = ws.UsedRange.SpecialCells(xlCellTypeFormulas)
+        On Error GoTo 0
+        If Not formulaCells Is Nothing Then totalFormulaCells = totalFormulaCells + formulaCells.Count
+        Set formulaCells = Nothing
+    Next
+    
+    ' Progress bar setup
+    barWidth = 40
+    Application.StatusBar = "[" & Space(barWidth) & "] 0%"
+    
+    ' Apply cross-sheet formatting
+    cellIndex = 0
+    For Each ws In ThisWorkbook.Worksheets
+        On Error Resume Next
+        Set formulaCells = ws.UsedRange.SpecialCells(xlCellTypeFormulas)
+        On Error GoTo 0
+        If Not formulaCells Is Nothing Then
+            For Each cell In formulaCells
+                cellIndex = cellIndex + 1
+                
+                ' Skip if result is text
+                If Not Application.WorksheetFunction.IsText(cell.Value) Then
+                    For Each otherWs In ThisWorkbook.Worksheets
+                        If otherWs Is ws Then GoTo NextSheet
+                        If InStr(cell.Formula, "'" & otherWs.Name & "'!") > 0 _
+                           Or InStr(cell.Formula, otherWs.Name & "!") > 0 Then
+                            cell.Interior.Color = RGB(184, 204, 228)
+                            Exit For
+                        End If
+NextSheet:
+                    Next
+                End If
+                
+                ' Update progress bar
+                If cellIndex Mod 10 = 0 Or cellIndex = totalFormulaCells Then
+                    currentBars = Int((cellIndex / totalFormulaCells) * barWidth)
+                    pctDone = Int((cellIndex / totalFormulaCells) * 100)
+                    Application.StatusBar = "[" & String(currentBars, "|") & _
+                        Space(barWidth - currentBars) & "] " & pctDone & "% Complete"
+                    DoEvents
+                End If
+            Next
+        End If
+        Set formulaCells = Nothing
+    Next
+    
+    ' Cleanup
+    Application.StatusBar = False
+    With Application
+        .DisplayStatusBar = False
+        .ScreenUpdating = True
+        .Calculation = xlCalculationAutomatic
+        .EnableEvents = True
+    End With
+End Sub
